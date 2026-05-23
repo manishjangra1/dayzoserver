@@ -154,26 +154,49 @@ export class SocialService {
       take: 20,
     });
 
-    // For each feed item, fetch the reactions
-    const itemsWithReactions = await Promise.all(
-      feedItems.map(async (item) => {
-        const reactions = await this.prisma.reaction.findMany({
-          where: { targetUserId: item.userId, createdAt: { gte: item.completedAt || undefined } },
-          include: {
-            user: { select: { username: true } },
-          },
-          take: 5,
-        });
+    if (feedItems.length === 0) {
+      return [];
+    }
 
-        return {
-          ...item,
-          reactions: reactions.map((r) => ({
-            username: r.user.username,
-            emoji: r.emoji,
-          })),
-        };
-      }),
+    // Find the earliest completion date in this page to limit bulk reactions search scope
+    const earliestCompletedAt = new Date(
+      Math.min(
+        ...feedItems.map((item) => new Date(item.completedAt || item.createdAt).getTime())
+      )
     );
+
+    // Query reactions in bulk for all target users of this feed page
+    const userIdsInFeed = feedItems.map((item) => item.userId);
+    const allReactions = await this.prisma.reaction.findMany({
+      where: {
+        targetUserId: { in: userIdsInFeed },
+        createdAt: { gte: earliestCompletedAt },
+      },
+      include: {
+        user: { select: { username: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Map bulk reactions back to feed items locally in memory
+    const itemsWithReactions = feedItems.map((item) => {
+      const itemCompletedTime = new Date(item.completedAt || item.createdAt).getTime();
+      const reactionsForItem = allReactions
+        .filter(
+          (r) =>
+            r.targetUserId === item.userId &&
+            new Date(r.createdAt).getTime() >= itemCompletedTime
+        )
+        .slice(0, 5);
+
+      return {
+        ...item,
+        reactions: reactionsForItem.map((r) => ({
+          username: r.user.username,
+          emoji: r.emoji,
+        })),
+      };
+    });
 
     return itemsWithReactions;
   }
@@ -272,4 +295,69 @@ export class SocialService {
 
     return { users, squads };
   }
+
+  // 8. Decline Friend Request
+  async declineFriendRequest(receiverId: string, senderId: string) {
+    const friendship = await this.prisma.friendship.findFirst({
+      where: {
+        senderId,
+        receiverId,
+        status: 'PENDING',
+      },
+    });
+
+    if (!friendship) {
+      throw new NotFoundException('Pending friend request not found');
+    }
+
+    await this.prisma.friendship.delete({
+      where: { id: friendship.id },
+    });
+
+    return { message: 'Friend request declined successfully' };
+  }
+
+  // 9. Remove Friend (Unfriend)
+  async removeFriend(userId: string, friendId: string) {
+    const friendship = await this.prisma.friendship.findFirst({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: friendId },
+          { senderId: friendId, receiverId: userId },
+        ],
+      },
+    });
+
+    if (!friendship) {
+      throw new NotFoundException('Friendship not found');
+    }
+
+    await this.prisma.friendship.delete({
+      where: { id: friendship.id },
+    });
+
+    return { message: 'Friend removed successfully' };
+  }
+
+  // 10. Get Pending Incoming Requests
+  async getIncomingRequests(userId: string) {
+    const requests = await this.prisma.friendship.findMany({
+      where: {
+        receiverId: userId,
+        status: 'PENDING',
+      },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true,
+            level: true,
+          },
+        },
+      },
+    });
+    return requests.map((r) => r.sender);
+  }
 }
+

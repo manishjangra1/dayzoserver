@@ -4,13 +4,23 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { User } from '@prisma/client';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
 
 class UpdateProfileDto {
   @ApiProperty({ example: 'https://api.dicebear.com/7.x/pixel-art/svg?seed=monk', required: false })
+  @IsOptional()
+  @IsString()
   avatar?: string;
 
   @ApiProperty({ example: 'new_username', required: false })
+  @IsOptional()
+  @IsString()
   username?: string;
+
+  @ApiProperty({ example: 'Warrior for continuous self-improvement.', required: false })
+  @IsOptional()
+  @IsString()
+  bio?: string;
 }
 
 @ApiTags('Users Profiles')

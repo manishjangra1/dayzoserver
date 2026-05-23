@@ -50,7 +50,7 @@ export class ChallengesService {
   }
 
   // 2. Complete today's challenge
-  async completeChallenge(userId: string) {
+  async completeChallenge(userId: string, proofText?: string, proofUrl?: string) {
     const todayChallenge = await this.getTodayChallenge();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -75,6 +75,8 @@ export class ChallengesService {
         challengeId: todayChallenge.id,
         completed: true,
         completedAt: new Date(),
+        proofText,
+        proofUrl,
       },
     });
 

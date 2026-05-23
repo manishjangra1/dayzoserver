@@ -90,4 +90,25 @@ export class SocialController {
   async search(@Query('q') query: string) {
     return this.socialService.searchGlobal(query);
   }
+
+  @Post('decline')
+  @ApiOperation({ summary: 'Decline a pending friend request from a sender ID' })
+  @ApiResponse({ status: 200, description: 'Successfully declined request.' })
+  async declineFriend(@CurrentUser() user: User, @Body() dto: AcceptRequestDto) {
+    return this.socialService.declineFriendRequest(user.id, dto.senderId);
+  }
+
+  @Post('remove')
+  @ApiOperation({ summary: 'Remove an active friendship (unfriend) by friend user ID' })
+  @ApiResponse({ status: 200, description: 'Successfully unfriended.' })
+  async removeFriend(@CurrentUser() user: User, @Body() dto: { friendId: string }) {
+    return this.socialService.removeFriend(user.id, dto.friendId);
+  }
+
+  @Get('requests')
+  @ApiOperation({ summary: 'Get list of incoming pending friend requests' })
+  @ApiResponse({ status: 200, description: 'Returned list of pending requests.' })
+  async getRequests(@CurrentUser() user: User) {
+    return this.socialService.getIncomingRequests(user.id);
+  }
 }

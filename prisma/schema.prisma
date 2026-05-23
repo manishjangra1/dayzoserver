@@ -20,6 +20,7 @@ model User {
   lastActiveAt  DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  bio           String?
 
   challenges          UserChallenge[]
   badges              UserBadge[]
@@ -64,6 +65,8 @@ model UserChallenge {
   completed   Boolean   @default(false)
   skipped     Boolean   @default(false)
   completedAt DateTime?
+  proofText   String?
+  proofUrl    String?
   createdAt   DateTime  @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -71,6 +74,8 @@ model UserChallenge {
   comments  Comment[]
 
   @@unique([userId, challengeId, createdAt])
+  @@index([userId])
+  @@index([challengeId])
 }
 
 model Badge {
@@ -95,6 +100,8 @@ model UserBadge {
   badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
 
   @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
 }
 
 model Friendship {
@@ -109,6 +116,8 @@ model Friendship {
   receiver User @relation("ReceivedFriendships", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
+  @@index([senderId])
+  @@index([receiverId])
 }
 
 model Reaction {
@@ -120,6 +129,9 @@ model Reaction {
 
   user       User @relation("SentReactions", fields: [userId], references: [id], onDelete: Cascade)
   targetUser User @relation("ReceivedReactions", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([targetUserId])
 }
 
 model Notification {
@@ -131,6 +143,8 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Squad {
@@ -155,4 +169,7 @@ model Comment {
 
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   userChallenge UserChallenge @relation(fields: [userChallengeId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userChallengeId])
 }

@@ -1,9 +1,22 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Body } from '@nestjs/common';
 import { ChallengesService } from './challenges.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { User } from '@prisma/client';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString } from 'class-validator';
+
+class CompleteChallengeDto {
+  @ApiProperty({ example: 'Completed in the backyard.', required: false })
+  @IsString()
+  @IsOptional()
+  proofText?: string;
+
+  @ApiProperty({ example: 'https://images.unsplash.com/mock.png', required: false })
+  @IsString()
+  @IsOptional()
+  proofUrl?: string;
+}
 
 @ApiTags('Daily Challenges')
 @Controller('challenges')
@@ -23,8 +36,8 @@ export class ChallengesController {
   @ApiOperation({ summary: 'Mark today\'s rotating daily challenge as successfully completed' })
   @ApiResponse({ status: 200, description: 'Successfully completed. Returns rewards state, levels, haptics info, and badge unlocks.' })
   @ApiResponse({ status: 400, description: 'Already completed today\'s challenge.' })
-  async complete(@CurrentUser() user: User) {
-    return this.challengesService.completeChallenge(user.id);
+  async complete(@CurrentUser() user: User, @Body() dto: CompleteChallengeDto) {
+    return this.challengesService.completeChallenge(user.id, dto.proofText, dto.proofUrl);
   }
 
   @Post('skip')

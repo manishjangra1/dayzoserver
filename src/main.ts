@@ -6,14 +6,26 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // 1. Enable CORS for development
+  // 1. HTTP Security Headers
+  app.use((req: any, res: any, next: any) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Content-Security-Policy', "default-src 'self'");
+    next();
+  });
+
+  // 2. Enable CORS for development
   app.enableCors({
     origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
-  // 2. Enforce strict DTO validations globally
+  // 3. Set Global Prefix
+  app.setGlobalPrefix('api/v1', { exclude: ['api/docs'] });
+
+  // 4. Enforce strict DTO validations globally
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

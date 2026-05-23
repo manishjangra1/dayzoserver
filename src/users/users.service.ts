@@ -31,7 +31,7 @@ export class UsersService {
   }
 
   // 2. Update Profile & Onboarding Settings
-  async updateProfile(userId: string, data: { avatar?: string; username?: string }) {
+  async updateProfile(userId: string, data: { avatar?: string; username?: string; bio?: string }) {
     const updated = await this.prisma.user.update({
       where: { id: userId },
       data,
