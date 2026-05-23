@@ -138,6 +138,17 @@ export class SocialService {
           },
         },
         challenge: true,
+        comments: {
+          include: {
+            user: {
+              select: {
+                username: true,
+                avatar: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: { completedAt: 'desc' },
       take: 20,
@@ -186,5 +197,79 @@ export class SocialService {
     });
 
     return { success: true, reaction };
+  }
+
+  // 6. Create a Comment on completion card
+  async addComment(userId: string, userChallengeId: string, content: string) {
+    const completion = await this.prisma.userChallenge.findUnique({
+      where: { id: userChallengeId },
+    });
+
+    if (!completion) {
+      throw new NotFoundException('Completion card not found');
+    }
+
+    const comment = await this.prisma.comment.create({
+      data: {
+        userId,
+        userChallengeId,
+        content,
+      },
+      include: {
+        user: {
+          select: {
+            username: true,
+            avatar: true,
+          },
+        },
+      },
+    });
+
+    return comment;
+  }
+
+  // 7. Global Search for discovery (Users and Squads)
+  async searchGlobal(query: string) {
+    if (!query || query.trim().length === 0) {
+      return { users: [], squads: [] };
+    }
+
+    const cleanedQuery = query.trim();
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        username: {
+          contains: cleanedQuery,
+          mode: 'insensitive',
+        },
+      },
+      select: {
+        id: true,
+        username: true,
+        avatar: true,
+        xp: true,
+        level: true,
+      },
+      take: 10,
+    });
+
+    const squads = await this.prisma.squad.findMany({
+      where: {
+        name: {
+          contains: cleanedQuery,
+          mode: 'insensitive',
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        avatar: true,
+        xp: true,
+        level: true,
+      },
+      take: 10,
+    });
+
+    return { users, squads };
   }
 }

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, UseGuards, Query } from '@nestjs/common';
 import { SocialService } from './social.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -72,5 +72,22 @@ export class SocialController {
   @ApiResponse({ status: 201, description: 'Reaction successfully logged.' })
   async react(@CurrentUser() user: User, @Body() dto: ReactDto) {
     return this.socialService.reactToFriend(user.id, dto.targetUserId, dto.emoji);
+  }
+
+  @Post('comment')
+  @ApiOperation({ summary: 'Add a text comment on a user completion card' })
+  @ApiResponse({ status: 201, description: 'Comment successfully added.' })
+  async addComment(
+    @CurrentUser() user: User,
+    @Body() dto: { userChallengeId: string; content: string }
+  ) {
+    return this.socialService.addComment(user.id, dto.userChallengeId, dto.content);
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Global discovery search across users and squads' })
+  @ApiResponse({ status: 200, description: 'Returned matching users and squads.' })
+  async search(@Query('q') query: string) {
+    return this.socialService.searchGlobal(query);
   }
 }

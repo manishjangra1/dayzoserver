@@ -28,6 +28,10 @@ model User {
   sentReactions       Reaction[]        @relation("SentReactions")
   receivedReactions   Reaction[]        @relation("ReceivedReactions")
   notifications       Notification[]
+
+  squadId   String?
+  squad     Squad?      @relation(fields: [squadId], references: [id], onDelete: SetNull)
+  comments  Comment[]
 }
 
 model Challenge {
@@ -64,6 +68,7 @@ model UserChallenge {
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  comments  Comment[]
 
   @@unique([userId, challengeId, createdAt])
 }
@@ -126,4 +131,28 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Squad {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  inviteCode  String   @unique
+  avatar      String?
+  xp          Int      @default(0)
+  level       Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     User[]
+}
+
+model Comment {
+  id              String   @id @default(uuid())
+  userId          String
+  userChallengeId String
+  content         String
+  createdAt       DateTime @default(now())
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userChallenge UserChallenge @relation(fields: [userChallengeId], references: [id], onDelete: Cascade)
 }
