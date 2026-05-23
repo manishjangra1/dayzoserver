@@ -22,11 +22,48 @@ export class UsersService {
       where: { userId, completed: true },
     });
 
+    // Calculate 28-day consistency heatmap
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 27);
+    startDate.setHours(0, 0, 0, 0);
+
+    const completions = await this.prisma.userChallenge.findMany({
+      where: {
+        userId,
+        completed: true,
+        completedAt: { gte: startDate },
+      },
+      select: {
+        completedAt: true,
+      },
+    });
+
+    const heatmapData: { day: number; date: string; completed: boolean }[] = [];
+    for (let i = 27; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const dateStr = d.toISOString().split('T')[0];
+
+      const hasCompletion = completions.some((c) => {
+        const compDate = new Date(c.completedAt || new Date());
+        compDate.setHours(0, 0, 0, 0);
+        return compDate.toISOString().split('T')[0] === dateStr;
+      });
+
+      heatmapData.push({
+        day: 28 - i,
+        date: dateStr,
+        completed: hasCompletion,
+      });
+    }
+
     return {
       ...user,
       title: this.getLevelTitle(user.xp),
       totalCompletions,
       badges: user.badges.map((ub) => ub.badge),
+      heatmapData,
     };
   }
 
