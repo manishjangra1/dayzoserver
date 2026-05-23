@@ -52,10 +52,12 @@ model Challenge {
 model DailyChallenge {
   id          String   @id @default(uuid())
   challengeId String
-  date        DateTime @unique
+  date        DateTime
   createdAt   DateTime @default(now())
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([date, challengeId])
 }
 
 model UserChallenge {

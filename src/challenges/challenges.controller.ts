@@ -7,6 +7,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiProperty } from '
 import { IsOptional, IsString } from 'class-validator';
 
 class CompleteChallengeDto {
+  @ApiProperty({ example: 'uuid-of-challenge', required: false })
+  @IsString()
+  @IsOptional()
+  challengeId?: string;
+
   @ApiProperty({ example: 'Completed in the backyard.', required: false })
   @IsString()
   @IsOptional()
@@ -18,6 +23,13 @@ class CompleteChallengeDto {
   proofUrl?: string;
 }
 
+class SkipChallengeDto {
+  @ApiProperty({ example: 'uuid-of-challenge', required: false })
+  @IsString()
+  @IsOptional()
+  challengeId?: string;
+}
+
 @ApiTags('Daily Challenges')
 @Controller('challenges')
 @UseGuards(JwtAuthGuard)
@@ -26,10 +38,10 @@ export class ChallengesController {
   constructor(private readonly challengesService: ChallengesService) {}
 
   @Get('today')
-  @ApiOperation({ summary: 'Get the active daily challenge for today' })
+  @ApiOperation({ summary: 'Get the active daily challenges for today' })
   @ApiResponse({ status: 200, description: 'Successfully returned today\'s challenge details.' })
-  async getToday() {
-    return this.challengesService.getTodayChallenge();
+  async getToday(@CurrentUser() user: User) {
+    return this.challengesService.getTodayChallenges(user.id);
   }
 
   @Post('complete')
@@ -37,15 +49,15 @@ export class ChallengesController {
   @ApiResponse({ status: 200, description: 'Successfully completed. Returns rewards state, levels, haptics info, and badge unlocks.' })
   @ApiResponse({ status: 400, description: 'Already completed today\'s challenge.' })
   async complete(@CurrentUser() user: User, @Body() dto: CompleteChallengeDto) {
-    return this.challengesService.completeChallenge(user.id, dto.proofText, dto.proofUrl);
+    return this.challengesService.completeChallenge(user.id, dto.challengeId, dto.proofText, dto.proofUrl);
   }
 
   @Post('skip')
   @ApiOperation({ summary: 'Skip today\'s rotating challenge (uses a streak freeze if available)' })
   @ApiResponse({ status: 200, description: 'Successfully skipped. Returns adjusted streak and remaining freezes count.' })
   @ApiResponse({ status: 400, description: 'Already skipped or completed today.' })
-  async skip(@CurrentUser() user: User) {
-    return this.challengesService.skipChallenge(user.id);
+  async skip(@CurrentUser() user: User, @Body() dto: SkipChallengeDto) {
+    return this.challengesService.skipChallenge(user.id, dto.challengeId);
   }
 
   @Get('history')

@@ -5,20 +5,21 @@ import { PrismaService } from '../prisma/prisma.service';
 export class ChallengesService {
   constructor(private prisma: PrismaService) {}
 
-  // 1. Get or Rotate today's challenge
-  async getTodayChallenge() {
+  // 1. Get or Rotate today's 5 challenges
+  async getTodayChallenges(userId?: string) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Check if there is already a challenge assigned for today
-    let dailyChallenge = await this.prisma.dailyChallenge.findUnique({
+    // Check if there are already 5 challenges assigned for today
+    let dailyChallenges = await this.prisma.dailyChallenge.findMany({
       where: { date: today },
       include: { challenge: true },
     });
 
-    if (!dailyChallenge) {
-      // If not, rotate and pick one from the challenge database
+    if (dailyChallenges.length < 5) {
+      // If not, pick 5 unique challenges from the challenge database
       const allChallenges = await this.prisma.challenge.findMany();
+      
       if (allChallenges.length === 0) {
         // Fallback placeholder if seed is missing
         const fallback = await this.prisma.challenge.create({
@@ -34,45 +35,100 @@ export class ChallengesService {
         allChallenges.push(fallback);
       }
 
-      // Pick a random challenge
-      const randomChallenge = allChallenges[Math.floor(Math.random() * allChallenges.length)];
+      // We need to pick 5 unique challenges randomly or as many as we have available
+      const shuffled = [...allChallenges].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, Math.min(5, shuffled.length));
 
-      dailyChallenge = await this.prisma.dailyChallenge.create({
-        data: {
-          challengeId: randomChallenge.id,
-          date: today,
-        },
+      for (const chall of selected) {
+        const existing = dailyChallenges.find((dc) => dc.challengeId === chall.id);
+        if (!existing) {
+          try {
+            await this.prisma.dailyChallenge.create({
+              data: {
+                challengeId: chall.id,
+                date: today,
+              },
+            });
+          } catch (e) {
+            // Safe concurrent catch
+          }
+        }
+      }
+
+      // Re-fetch to guarantee sync
+      dailyChallenges = await this.prisma.dailyChallenge.findMany({
+        where: { date: today },
         include: { challenge: true },
       });
     }
 
-    return dailyChallenge.challenge;
+    // Extract challenge records
+    const challenges = dailyChallenges.map((dc) => dc.challenge);
+
+    // If userId is provided, inject completion status for today
+    if (userId) {
+      const userCompletions = await this.prisma.userChallenge.findMany({
+        where: {
+          userId,
+          challengeId: { in: challenges.map((c) => c.id) },
+          completedAt: { gte: today },
+        },
+      });
+
+      return challenges.map((challenge) => {
+        const comp = userCompletions.find((uc) => uc.challengeId === challenge.id);
+        return {
+          ...challenge,
+          completed: comp ? comp.completed : false,
+          skipped: comp ? comp.skipped : false,
+          userChallengeId: comp ? comp.id : null,
+          proofText: comp ? comp.proofText : null,
+        };
+      });
+    }
+
+    return challenges.map((challenge) => ({
+      ...challenge,
+      completed: false,
+      skipped: false,
+      userChallengeId: null,
+      proofText: null,
+    }));
   }
 
-  // 2. Complete today's challenge
-  async completeChallenge(userId: string, proofText?: string, proofUrl?: string) {
-    const todayChallenge = await this.getTodayChallenge();
+  // Backwards compatible getter
+  async getTodayChallenge() {
+    const list = await this.getTodayChallenges();
+    return list[0];
+  }
+
+  // 2. Complete a daily challenge
+  async completeChallenge(userId: string, challengeId?: string, proofText?: string, proofUrl?: string) {
+    const todayChallenges = await this.getTodayChallenges(userId);
+    
+    // Find target challenge
+    let targetChallenge = todayChallenges.find((c) => c.id === challengeId);
+    if (!targetChallenge) {
+      if (challengeId) {
+        throw new NotFoundException('Challenge not found in today\'s active list!');
+      } else {
+        // Fallback to first incomplete challenge
+        targetChallenge = todayChallenges.find((c) => !c.completed) || todayChallenges[0];
+      }
+    }
+
+    if (targetChallenge.completed) {
+      throw new BadRequestException('You have already completed this challenge today!');
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
-    // Check if already completed today
-    const existing = await this.prisma.userChallenge.findFirst({
-      where: {
-        userId,
-        challengeId: todayChallenge.id,
-        completed: true,
-      },
-    });
-
-    if (existing) {
-      throw new BadRequestException('You have already completed today\'s challenge!');
-    }
 
     // Record Completion
     const userChallenge = await this.prisma.userChallenge.create({
       data: {
         userId,
-        challengeId: todayChallenge.id,
+        challengeId: targetChallenge.id,
         completed: true,
         completedAt: new Date(),
         proofText,
@@ -84,19 +140,19 @@ export class ChallengesService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const xpGained = todayChallenge.xpReward;
+    const xpGained = targetChallenge.xpReward;
     const nextXp = user.xp + xpGained;
     const nextLevel = Math.floor(nextXp / 100) + 1;
     const isLevelUp = nextLevel > user.level;
 
-    // Calculate new streak
+    // Calculate new streak (Only increments on first completion of a given day)
     let newStreak = user.streak;
     const lastActive = user.lastActiveAt;
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
     if (!lastActive) {
-      // First challenge completed
+      // First challenge completed ever
       newStreak = 1;
     } else {
       const lastActiveDay = new Date(lastActive);
@@ -133,7 +189,7 @@ export class ChallengesService {
 
     return {
       completed: true,
-      challenge: todayChallenge,
+      challenge: targetChallenge,
       xpGained,
       streakUpdated: newStreak,
       levelUp: isLevelUp,
@@ -146,28 +202,30 @@ export class ChallengesService {
     };
   }
 
-  // 3. Skip challenge
-  async skipChallenge(userId: string) {
-    const todayChallenge = await this.getTodayChallenge();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  // 3. Skip/Freeze a challenge
+  async skipChallenge(userId: string, challengeId?: string) {
+    const todayChallenges = await this.getTodayChallenges(userId);
+    
+    // Find target challenge
+    let targetChallenge = todayChallenges.find((c) => c.id === challengeId);
+    if (!targetChallenge) {
+      if (challengeId) {
+        throw new NotFoundException('Challenge not found in today\'s active list!');
+      } else {
+        // Fallback to first incomplete challenge
+        targetChallenge = todayChallenges.find((c) => !c.completed) || todayChallenges[0];
+      }
+    }
 
-    const existing = await this.prisma.userChallenge.findFirst({
-      where: {
-        userId,
-        challengeId: todayChallenge.id,
-      },
-    });
-
-    if (existing) {
-      throw new BadRequestException('You have already completed or skipped today\'s challenge!');
+    if (targetChallenge.completed || targetChallenge.skipped) {
+      throw new BadRequestException('You have already completed or skipped this challenge today!');
     }
 
     // Record Skip
     await this.prisma.userChallenge.create({
       data: {
         userId,
-        challengeId: todayChallenge.id,
+        challengeId: targetChallenge.id,
         completed: false,
         skipped: true,
         completedAt: new Date(),
