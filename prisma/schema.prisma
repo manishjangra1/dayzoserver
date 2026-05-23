@@ -1,0 +1,129 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  avatar        String?
+  xp            Int       @default(0)
+  level         Int       @default(1)
+  streak        Int       @default(0)
+  longestStreak Int       @default(0)
+  streakFreezes Int       @default(1)
+  lastActiveAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  challenges          UserChallenge[]
+  badges              UserBadge[]
+  sentFriendships     Friendship[]      @relation("SentFriendships")
+  receivedFriendships Friendship[]      @relation("ReceivedFriendships")
+  sentReactions       Reaction[]        @relation("SentReactions")
+  receivedReactions   Reaction[]        @relation("ReceivedReactions")
+  notifications       Notification[]
+}
+
+model Challenge {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  category    String   // fitness, productivity, learning, mindfulness, social
+  difficulty  String   // easy, medium, hard
+  xpReward    Int
+  duration    Int      // estimated duration in minutes
+  createdAt   DateTime @default(now())
+
+  dailyChallenges DailyChallenge[]
+  userChallenges  UserChallenge[]
+}
+
+model DailyChallenge {
+  id          String   @id @default(uuid())
+  challengeId String
+  date        DateTime @unique
+  createdAt   DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+}
+
+model UserChallenge {
+  id          String    @id @default(uuid())
+  userId      String
+  challengeId String
+  completed   Boolean   @default(false)
+  skipped     Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId, createdAt])
+}
+
+model Badge {
+  id               String   @id @default(uuid())
+  title            String
+  description      String
+  icon             String
+  requirementType  String   // STREAK_DAYS, TOTAL_COMPLETIONS, FIRST_CHALLENGE
+  requirementValue Int
+  createdAt        DateTime @default(now())
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String
+  badgeId    String
+  unlockedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
+
+model Friendship {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   // PENDING, ACCEPTED, BLOCKED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sender   User @relation("SentFriendships", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("ReceivedFriendships", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+}
+
+model Reaction {
+  id           String   @id @default(uuid())
+  userId       String
+  targetUserId String
+  emoji        String
+  createdAt    DateTime @default(now())
+
+  user       User @relation("SentReactions", fields: [userId], references: [id], onDelete: Cascade)
+  targetUser User @relation("ReceivedReactions", fields: [targetUserId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
