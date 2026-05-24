@@ -9,7 +9,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   constructor() {
     const pool = new Pool({
-      connectionString: process.env.DATABASE_URL || 'postgresql://dayzo_user:dayzo_password@localhost:5432/dayzo_db?schema=public',
+      connectionString: process.env.DATABASE_URL || 'postgresql://dayzo_user:dayzo_password@127.0.0.1:5432/dayzo_db?schema=public',
     });
     const adapter = new PrismaPg(pool);
     super({ adapter });
