@@ -33,6 +33,7 @@ model User {
   squadId   String?
   squad     Squad?      @relation(fields: [squadId], references: [id], onDelete: SetNull)
   comments  Comment[]
+  moderationReports ModerationReport[] @relation("ReporterUser")
 }
 
 model Challenge {
@@ -175,3 +176,119 @@ model Comment {
   @@index([userId])
   @@index([userChallengeId])
 }
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  roleId       String
+  role         AdminRole @relation(fields: [roleId], references: [id])
+  
+  auditLogs       AuditLog[]
+  resolvedReports ModerationReport[]
+}
+
+model AdminRole {
+  id          String       @id @default(uuid())
+  name        String       @unique // SUPER_ADMIN, ADMIN, MODERATOR, SUPPORT_AGENT, CONTENT_MANAGER
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  adminUsers  AdminUser[]
+  permissions Permission[]
+}
+
+model Permission {
+  id          String      @id @default(uuid())
+  name        String      @unique // e.g. "users:read", "challenges:write", "settings:write"
+  action      String      // READ, CREATE, UPDATE, DELETE, ALL
+  subject     String      // USERS, CHALLENGES, SQUADS, SOCIAL, GAMIFICATION, NOTIFICATIONS, CMS, SYSTEM
+  description String?
+  createdAt   DateTime    @default(now())
+  
+  roles       AdminRole[]
+}
+
+model AuditLog {
+  id           String     @id @default(uuid())
+  adminUserId  String?
+  action       String     // e.g. "USER_BAN", "CHALLENGE_CREATE"
+  targetEntity String     // e.g. "User", "Challenge"
+  targetId     String?
+  oldValues    Json?
+  newValues    Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime   @default(now())
+  
+  adminUser    AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  
+  @@index([adminUserId])
+  @@index([targetEntity, targetId])
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  description String?
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique // e.g. "XP_MULTIPLIER", "STREAK_FREEZE_LIMIT", "MAINTENANCE_MODE"
+  value       Json     // Dynamic JSON config value
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+model NotificationCampaign {
+  id            String    @id @default(uuid())
+  title         String
+  body          String
+  targetSegment String    // "ALL", "ACTIVE", "INACTIVE", "SQUAD_MEMBERS"
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  status        String    @default("PENDING") // PENDING, SENT, FAILED
+  deliveryCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+}
+
+model ModerationReport {
+  id               String    @id @default(uuid())
+  reporterId       String
+  targetType       String    // COMMENT, REACTION, USER, SQUAD
+  targetId         String    // ID of the comment, user, etc.
+  reason           String
+  status           String    @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  resolvedById     String?
+  resolutionAction String?   // "DELETE", "BAN", "WARNING", "NONE"
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  
+  reporter         User      @relation("ReporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  resolvedBy       AdminUser? @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
+  
+  @@index([reporterId])
+  @@index([resolvedById])
+  @@index([targetType, targetId])
+}
+
+model ContentBlock {
+  id        String   @id @default(uuid())
+  type      String   // ONBOARDING_SLIDE, MOTIVATIONAL_QUOTE, APP_BANNER
+  key       String   @unique
+  content   Json     // Dynamic content
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
